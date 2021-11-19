@@ -1,0 +1,338 @@
+##CONSTRUCTION MODEL FOR PINHIBENS DSM17395
+
+#importing packages
+from cobra.io import read_sbml_model, write_sbml_model
+import numpy as np
+
+#creating model from NCBI database
+!carve --refseq GCF_000154765.2 -o pinhibens_DSM17395.xml
+model = read_sbml_model('pinhibens_DSM17395.xml')
+
+#gap filling the model with rich medium (LB)
+%%time
+!carve --refseq GCF_000154765.2 --output Pinhibens_DSM17395_LB.xml --gapfill LB --init LB
+model = read_sbml_model('pinhibens_DSM17395_LB.xml')
+
+#solving problems about the SBML file -it was missing "boundaryCondition="false""
+for met in model.metabolites:
+    met.boundaryCondition = "false"
+
+#creating new file so the SBML problem is fixed
+write_sbml_model(model, "pinhibens_DSM17395_ok.xml")
+model = read_sbml_model('pinhibens_DSM17395_ok.xml')
+
+##CONSTRUCTION AND HIGH-LEVEL ANALYSIS OF STOICHIOMETRIC MATRIX (S)
+
+#creating the stoichiometric matrix from the model and cheching how sparse it is:
+from cobra.util import create_stoichiometric_matrix
+
+S=create_stoichiometric_matrix(model)
+S.shape
+
+nonzeros=np.count_nonzero(S)
+zeros=S[np.where(S == 0)].size
+percent_nonzeros=(nonzeros/(zeros+nonzeros))*100
+print("Number of Zeroes in S -->",zeros)
+print("Number of non-Zeroes in S -->",nonzeros)
+print("Percentage of non-zero elements in S-->",round(percent_nonzeros,2),"%")
+
+#finding the degrees of freedom (F) of our model
+from numpy.linalg import matrix_rank
+
+rank_S=matrix_rank(S, tol=None, hermitian=False)
+dimS=S.shape
+F=dimS[1]-rank_S
+print("Degrees of freedom:",F)
+
+#visualization of stoichiometric matrix (S)
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10,10))
+plt.spy(S, precision=0.01, markersize=1)
+plt.xlabel('Reactions')
+plt.ylabel('Metabolites')
+plt.show()
+
+##COMPUTE REACTION AND COMPOUND ADJACENCY MATRICES
+
+#construction of binary S
+Sb=np.where(S!=0,1,S)
+
+#compute the reaction (A_v) and compound (A_x) adjacency matrices
+A_v=Sb.T.dot(Sb)
+A_x=Sb.dot(Sb.T)
+
+#finding reaction that involves the largest number of metabolites
+D_av=A_v.diagonal()  #We create a new vector that only includes the diagonal information
+
+D_av.max() #We get the maximum value of the diagonal for A_v
+D_av.argmax() #We get the position where the maximum value of A_v is
+
+model.reactions[D_av.argmax()]  #we index on the model the position we are interested in
+
+#finding metabolite involved in the largest number of reactions
+D_ax=A_x.diagonal()  #We create a new vector that only includes the diagonal information ex. ATP.vs.ATP, etc.
+
+D_ax.max() #We get the maximum value of the diagonal for A_x
+D_ax.argmax() #We get the position where the maximum value of A_x is
+
+model.metabolites[D_ax.argmax()]  #we index on the model the position we are interested in
+
+#extracting the top10 most connected metabolites of the model:
+connectivity = sorted(zip(model.metabolites, A_x.diagonal()), key=lambda item: item[1], reverse=True)
+connectivity[0:10]
+
+topconnect=connectivity[0:10]
+
+u=0
+topelements=[]
+for element in topconnect:
+    topelements.append(topconnect[u][0].id) #Loop gives me the id for each element of topconnect list, and it adds it to u.
+    u=u+1 #append means "add afterwards"
+print("Top10 connected metabolites:", topelements)
+
+
+#finding the reactions involved with the metabolite "10fthf_c":
+
+listr=list(model.metabolites.get_by_id('10fthf_c').reactions)
+
+u=0
+ids=[]
+for element in listr:
+    ids.append(listr[u].id)
+    u=u+1 #append means "add afterwards"
+
+print("Reactions involved with 10fthf_c:",ids)
+
+
+##GENERATE NETWORKS FROM THE ADJACENCY MATRICES
+import networkx as nx
+
+#create a metablolite (A_x) centric network
+compound_centric_network = nx.from_numpy_matrix(A_x)
+
+mapping = dict(zip(range(0, len(model.metabolites)), model.metabolites)) #naming the nodes in the network after the metabolites in the model
+compound_centric_network = nx.relabel_nodes(compound_centric_network, mapping)
+
+#finding the number of connections (degree) each node (compound) has
+metabolite_degrees = compound_centric_network.degree()
+
+sorted_metabolite_degrees = sorted(metabolite_degrees, key=lambda item: item[1], reverse=True)
+sorted_metabolite_degrees[0:10]
+
+
+#FIND REACTION
+print(model.objective)
+
+model.reactions.Growth.metabolites
+
+write_sbml_model(model, "ok_model.xml")
+
+
+#DRAWING OF THE PATHWAY OF CENTAL CARBON METABOLISM
+
+copy_model=model
+copy_model.optimize()
+
+copy_model.optimize().objective_value
+
+solution=copy_model.optimize()
+solution.fluxes #finding fluxes of reactions
+
+solution.fluxes[solution.fluxes != 0.] #finding the non-zero fluxes
+
+save_json_model(model, "pinhibens_DSM17395_ok_2.json") #creating a JSON file from our model so we can work on escher
+
+import escher
+from escher import Builder
+
+builder = Builder(
+    model_json='pinhibens_DSM17395_ok_2.json'
+)
+
+print (builder) #on "Map" select "load map JSON" and then look for the file "Central metabolism.json"
+#to download as a picture just click "Map" and "export as PNG"
+
+#CREATING A SEARCH ENGINE TO FIND REACTIONS AND METABOLITES WITHIN OUR MODEL
+
+#Search engine:
+search1=input("What do you want to look for: reactions or  metabolites?\n Type in 'Reactions' or 'Metabolites'.\n")
+search2=input("Are you looking for a formula? Y/N \n")
+search3=input("Search for (case sensitive):\n")
+found1=False
+if search1=="Metabolites":
+        for metabolite in model.metabolites:
+            if search2=="N":
+                if search3 in metabolite.name:
+                    print("ID:",metabolite.id,"Name:",metabolite.name,"Formula:",metabolite.formula)
+                    found1=True
+                elif search3 in metabolite.id:
+                    print("ID:",metabolite.id,"Name:",metabolite.name,"Formula:",metabolite.formula)
+                    found1=True
+            if search2=="Y":
+                if search3 in metabolite.formula:
+                    print("Formula:",metabolite.formula,"ID:",metabolite.id,"Name:",metabolite.name)
+                    found1=True
+elif search1=="Reactions":
+        for reaction in model.reactions:
+            if search3 in reaction.name:
+                print("ID:",reaction.id,"Name:",reaction.name)
+                found1=True
+            elif search3 in reaction.id:
+                print("ID:",reaction.id,"Name:",reaction.name)
+                found1=True
+if found1==False:
+    print("Not found in model. Tip: Python is case sensitive.")
+    print("Not found in model. Tip: Python is case sensitive.")
+
+
+
+#LOOKING FOR THE ESSENTIAL GENES:
+
+essentiality = {} # all of the genes
+for gene in model.genes:
+    with model:
+        gene.knock_out()
+        essentiality[gene] = model.slim_optimize(error_value=0.)
+        
+esn_gene = dict() # essential genes
+
+for (key, value) in essentiality.items():
+    if value <= 0:
+        esn_gene[key] = value
+        
+print("All esssential genes:"esn_gene)
+
+
+# histogram of the essential genes:
+
+import pandas as pd
+
+df = pd.DataFrame.from_dict(esn_gene, orient='index')
+df = df.rename(columns={0: 'growth'})
+df = df.sort_values('growth')
+df.plot.hist()
+
+ax = df.plot.bar().axes
+ax.figure.set_size_inches(20, 10)
+
+
+#ADDITION OF PRODUCTION OF TDA INTO THE GSM AND SEEING THE POTENTIAL:
+# change the medium to the condition silimar with literature.
+with model:
+    medium = model.medium
+    medium['EX_glc__D_e']= 11.11
+    medium['EX_pi_e'] = 0.15
+    model.medium = medium
+    print(medium)
+    print("Objective function:",model.objective)
+    maxgrowth = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
+    print("Max growth rate:",maxgrowth)
+    new_reaction = Reaction('TDAF') # acser_c + h2o_c + nad_c + pac_c + so4_c --> nadh_c + ppa_c + pyr_c + tda_c
+    new_exchange_reaction = Reaction('EX_tda_e') # Exchange reaction for TDA
+    tda = Metabolite(id='tda_c', name='tropodithietic acid', compartment='c')
+    
+    new_reaction.add_metabolites({model.metabolites.so4_c: -1,
+                                  model.metabolites.acser_c: -1,
+                                  model.metabolites.pac_c: -1,
+                                  model.metabolites.nad_c: -1,
+                                  model.metabolites.h2o_c: -1,
+                                  tda: 1, 
+                                  model.metabolites.nadh_c: 1,
+                                  model.metabolites.ppa_c: 1,
+                                  model.metabolites.pyr_c: 1,
+                                 })
+    new_exchange_reaction.add_metabolites({tda: -1
+                                          })
+
+    
+    model.add_reactions([new_reaction])
+    model.add_reactions([new_exchange_reaction])
+    print(new_reaction.build_reaction_string())
+    print(new_exchange_reaction.build_reaction_string())
+    model.objective = model.reactions.EX_tda_e #change objective function to the TDA exchange reaction.
+    max_tda = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
+    print(max_tda)
+    
+    
+#Keep 20% gowth and maximize PDA production:
+with model:
+    medium = model.medium
+    medium['EX_glc__D_e']= 11.11
+    medium['EX_pi_e'] = 0.15
+    model.medium = medium
+    print(medium)
+    print("Objective function:",model.objective)
+    maxgrowth = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
+    print("Max growth rate:",maxgrowth)
+    twentygrowth=maxgrowth*0.2
+    print("20% growth=",twentygrowth)
+    new_reaction = Reaction('TDAF') # acser_c + h2o_c + nad_c + pac_c + so4_c --> nadh_c + ppa_c + pyr_c + tda_c
+    new_exchange_reaction = Reaction('EX_tda_e') # Exchange reaction for TDA
+    tda = Metabolite(id='tda_c', name='tropodithietic acid', compartment='c')
+    
+    new_reaction.add_metabolites({model.metabolites.so4_c: -1,
+                                  model.metabolites.acser_c: -1,
+                                  model.metabolites.pac_c: -1,
+                                  model.metabolites.nad_c: -1,
+                                  model.metabolites.h2o_c: -1,
+                                  tda: 1, 
+                                  model.metabolites.nadh_c: 1,
+                                  model.metabolites.ppa_c: 1,
+                                  model.metabolites.pyr_c: 1,
+                                 })
+    new_exchange_reaction.add_metabolites({tda: -1
+                                          })
+    
+    model.add_reactions([new_reaction])
+    model.add_reactions([new_exchange_reaction])
+    model.reactions.Growth.lower_bound = twentygrowth # change the growth rate to 20%.
+    print(new_reaction.build_reaction_string())
+    print(new_exchange_reaction.build_reaction_string())
+    model.objective = model.reactions.EX_tda_e #change objective function to the TDA exchange reaction.
+    reasonable_tda = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
+    print(reasonable_tda)
+    
+    
+    
+###TESTING GSM MODEL AGAINST DATA FROM LITERATURE：
+#Calculating experimental growth rate
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import scipy
+import numpy as np
+
+data_bio = pd.read_csv("data/data_bio.csv")
+print(data_bio)
+
+from scipy.optimize import curve_fit
+
+data_bio.plot(x='Time (h)', style='.-');
+
+#important to have the x-variable first.
+#keep in mind the order because the answers are shown in the same order
+
+#the exponential fit growth for biomass is:        f=a* exp(mu_max * t)
+#a is biomass concentration at t0
+#mu is mu_max, maximum biomass growth rate
+
+f= lambda t,a,mu: a*np.exp(mu*t)
+
+exponentialtime= data_bio.loc[11:17, 'Time (h)']
+
+exponentialbiomass= [0.19,0.24,0.28,0.33,0.42,0.51,0.6]
+
+popt,pcof=curve_fit(f, exponentialtime, exponentialbiomass)
+
+#popt contains a and mu, pcof is the covariance
+
+#a=0.008 and mu=0.237 because of the order stablished before
+
+x0=popt[0]
+
+mu=popt[1]
+
+print('Growth rate : ',mu,'(h-1)') 
+
+
