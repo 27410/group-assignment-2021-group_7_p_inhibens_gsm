@@ -12,7 +12,7 @@
 > Good luck!
 
 ## Project summary (<300 words)
-Our objective is to generate and validate this new GSM from P.inhibens. Also, we want to maximize the production of tropodithietic acid (TPA), a valuable compound with various properties.
+Our objective is to generate and validate this new GSM from P.inhibens. Also, we want to maximize the production of tropodithietic acid (TDA), a valuable compound with various properties.
 
 For it we've been following all the steps we've been learning throught the different assignments.
 
