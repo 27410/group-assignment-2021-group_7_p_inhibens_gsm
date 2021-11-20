@@ -303,7 +303,7 @@ import pandas as pd
 import scipy
 import numpy as np
 
-data_bio = pd.read_csv("data/data_bio.csv")
+data_bio = pd.read_csv("data_bio.csv")
 print(data_bio)
 
 from scipy.optimize import curve_fit
