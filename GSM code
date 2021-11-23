@@ -336,3 +336,5 @@ mu=popt[1]
 print('Growth rate : ',mu,'(h-1)') 
 
 
+
+
