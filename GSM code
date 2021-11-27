@@ -216,57 +216,30 @@ df.plot.hist()
 ax = df.plot.bar().axes
 ax.figure.set_size_inches(20, 10)
 
+## Calculate growth related parameters ##
 
-#ADDITION OF PRODUCTION OF TDA INTO THE GSM AND SEEING THE POTENTIAL:
-# change the medium to the condition silimar with literature.
+# Growth in glucose
+
 with model:
     medium = model.medium
-    medium['EX_glc__D_e']= 11.11
-    medium['EX_pi_e'] = 0.15
+    medium['EX_glc__D_e'] = 22.22
+    medium['EX_pi_e'] = 0.3
     model.medium = medium
-    print(medium)
-    print("Objective function:",model.objective)
-    maxgrowth = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
-    print("Max growth rate:",maxgrowth)
-    new_reaction = Reaction('TDAF') # acser_c + h2o_c + nad_c + pac_c + so4_c --> nadh_c + ppa_c + pyr_c + tda_c
-    new_exchange_reaction = Reaction('EX_tda_e') # Exchange reaction for TDA
-    tda = Metabolite(id='tda_c', name='tropodithietic acid', compartment='c')
     
-    new_reaction.add_metabolites({model.metabolites.so4_c: -1,
-                                  model.metabolites.acser_c: -1,
-                                  model.metabolites.pac_c: -1,
-                                  model.metabolites.nad_c: -1,
-                                  model.metabolites.h2o_c: -1,
-                                  tda: 1, 
-                                  model.metabolites.nadh_c: 1,
-                                  model.metabolites.ppa_c: 1,
-                                  model.metabolites.pyr_c: 1,
-                                 })
-    new_exchange_reaction.add_metabolites({tda: -1
-                                          })
+    maxgrowth_1 = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
+    
+    biomass_yield_1 = maxgrowth_1/model.reactions.EX_glc__D_e.flux
+    
+#Growth with TDA production in glucose
 
-    
-    model.add_reactions([new_reaction])
-    model.add_reactions([new_exchange_reaction])
-    print(new_reaction.build_reaction_string())
-    print(new_exchange_reaction.build_reaction_string())
-    model.objective = model.reactions.EX_tda_e #change objective function to the TDA exchange reaction.
-    max_tda = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
-    print(max_tda)
-    
-    
-#Keep 20% gowth and maximize PDA production:
 with model:
     medium = model.medium
-    medium['EX_glc__D_e']= 11.11
-    medium['EX_pi_e'] = 0.15
+    medium['EX_glc__D_e'] = 22.22
+    medium['EX_pi_e'] = 0.3
     model.medium = medium
-    print(medium)
-    print("Objective function:",model.objective)
-    maxgrowth = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
-    print("Max growth rate:",maxgrowth)
-    twentygrowth=maxgrowth*0.2
-    print("20% growth=",twentygrowth)
+
+    maxgrowth_2 = model.optimize().objective_value 
+  
     new_reaction = Reaction('TDAF') # acser_c + h2o_c + nad_c + pac_c + so4_c --> nadh_c + ppa_c + pyr_c + tda_c
     new_exchange_reaction = Reaction('EX_tda_e') # Exchange reaction for TDA
     tda = Metabolite(id='tda_c', name='tropodithietic acid', compartment='c')
@@ -286,14 +259,149 @@ with model:
     
     model.add_reactions([new_reaction])
     model.add_reactions([new_exchange_reaction])
-    model.reactions.Growth.lower_bound = twentygrowth # change the growth rate to 20%.
-    print(new_reaction.build_reaction_string())
-    print(new_exchange_reaction.build_reaction_string())
     model.objective = model.reactions.EX_tda_e #change objective function to the TDA exchange reaction.
-    reasonable_tda = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
-    print(reasonable_tda)
+    max_tda_2 = model.optimize().objective_value 
+    biomass_yield_2 = maxgrowth_2/model.reactions.EX_glc__D_e.flux
+    tda_yield_2 = max_tda_2 / model.reactions.EX_glc__D_e.flux
+    glc_flux_2 = model.reactions.EX_glc__D_e.flux
+    
+#20% Growth with TDA production in glucose
+
+with model:
+    medium = model.medium
+    medium['EX_glc__D_e'] = 22.22
+    medium['EX_pi_e'] = 0.3
+    model.medium = medium
+
+    maxgrowth_3 = model.optimize().objective_value
+    twentygrowth_3 = maxgrowth_3*0.2
+  
+    new_reaction = Reaction('TDAF') # acser_c + h2o_c + nad_c + pac_c + so4_c --> nadh_c + ppa_c + pyr_c + tda_c
+    new_exchange_reaction = Reaction('EX_tda_e') # Exchange reaction for TDA
+    tda = Metabolite(id='tda_c', name='tropodithietic acid', compartment='c')
+    
+    new_reaction.add_metabolites({model.metabolites.so4_c: -1,
+                                  model.metabolites.acser_c: -1,
+                                  model.metabolites.pac_c: -1,
+                                  model.metabolites.nad_c: -1,
+                                  model.metabolites.h2o_c: -1,
+                                  tda: 1, 
+                                  model.metabolites.nadh_c: 1,
+                                  model.metabolites.ppa_c: 1,
+                                  model.metabolites.pyr_c: 1,
+                                 })
+    new_exchange_reaction.add_metabolites({tda: -1
+                                          })
+    
+    model.add_reactions([new_reaction])
+    model.add_reactions([new_exchange_reaction])
+    model.objective = model.reactions.EX_tda_e #change objective function to the TDA exchange reaction.
+    model.reactions.Growth.lower_bound = twentygrowth_3
+    max_tda_3 = model.optimize().objective_value 
+    biomass_yield_3 = maxgrowth_3/model.reactions.EX_glc__D_e.flux
+    tda_yield_3 = max_tda_3 / model.reactions.EX_glc__D_e.flux
+    glc_flux_3 = model.reactions.EX_glc__D_e.flux
     
     
+#20% Growth with TDA pathway and changing Carbon source to G3P 
+
+with model:
+    medium = model.medium
+    medium['EX_glc__D_e'] = 0
+    medium['EX_g3pg_e'] = 22.22
+    medium['EX_pi_e'] = 0.3
+    model.medium = medium
+    
+    maxgrowth_4 = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
+    twentygrowth_4 = maxgrowth_4*0.2
+    
+    new_reaction = Reaction('TDAF') # acser_c + h2o_c + nad_c + pac_c + so4_c --> nadh_c + ppa_c + pyr_c + tda_c
+    new_exchange_reaction = Reaction('EX_tda_e') # Exchange reaction for TDA
+    tda = Metabolite(id='tda_c', name='tropodithietic acid', compartment='c')
+    
+    new_reaction.add_metabolites({model.metabolites.so4_c: -1,
+                                  model.metabolites.acser_c: -1,
+                                  model.metabolites.pac_c: -1,
+                                  model.metabolites.nad_c: -1,
+                                  model.metabolites.h2o_c: -1,
+                                  tda: 1, 
+                                  model.metabolites.nadh_c: 1,
+                                  model.metabolites.ppa_c: 1,
+                                  model.metabolites.pyr_c: 1,
+                                 })
+    new_exchange_reaction.add_metabolites({tda: -1
+                                          })
+    
+    
+    model.add_reactions([new_reaction])
+    model.add_reactions([new_exchange_reaction])
+    
+    model.objective = model.reactions.EX_tda_e
+    model.reactions.Growth.lower_bound = twentygrowth_4
+    max_tda_4 = model.optimize().objective_value 
+    biomass_yield_4 = maxgrowth_4/model.reactions.EX_g3pg_e.flux
+    tda_yield_4 = max_tda_4 / model.reactions.EX_g3pg_e.flux
+    gpg_flux = model.reactions.EX_g3pg_e.flux
+   
+ 
+# Screening carbon source in different scenario
+
+er_c = [] # define and create a set/list called 'er_c', meaning exchange reactions which contain carbon source.
+for exchange_reaction in copy_model.exchanges:
+        er = exchange_reaction.reactants[0].formula # get the corresponding first reactant in each exchange reactions.
+        if "C" in er: # discriminate if the reactant has the letter "C".
+            er_c.append(exchange_reaction) # Append the corresponding exchange_reaction to the set/list 'er_c' if the result of the previous step is true.
+
+u = 0
+er_c_id = [] # defind and create a set called 'er_c_id', which means the IDs of all exchange reaction of carbon source.
+
+for er_c_x in er_c: 
+    er_c_id.append(er_c[u].id) # also can do with '.name', '.formula', '.compartment', etc.
+    u=u+1
+    
+
+# looking for optimal carbon source(s)
+
+carbon_source_exchanges = er_c_id
+cs_optimal = []
+for cs in er_c_id:
+    with copy_model:
+        medium = copy_model.medium
+        medium['EX_glc__D_e']=0
+        medium['EX_pi_e'] = 0.3
+        medium[cs] = 22.22
+        copy_model.medium = medium
+        growth_rate = copy_model.slim_optimize(error_value=0.)
+        
+        if growth_rate > 0.4:
+            cs_optimal.append(cs)
+            
+# looking for carbon source suitable in anaerobic situations
+
+carbon_source_exchanges = er_c_id
+cs_anaerobic = []
+for cs in er_c_id:
+    with copy_model:
+        medium = copy_model.medium
+        medium['EX_glc__D_e']=0
+        medium['EX_o2_e'] = 0
+        medium['EX_pi_e'] = 0.3
+        medium[cs] = 22.22
+        copy_model.medium = medium
+        growth_rate = copy_model.slim_optimize(error_value=0.)
+        
+        if growth_rate > 0:
+            cs_anaerobic.append(cs)
+
+
+# CO2 flux
+
+import pandas as pd
+solution = model.optimize()
+n0fluxes = solution.fluxes[solution.fluxes!=0]
+CO2_flux = n0fluxes["CO2t"]
+
+#Anaerobic growth
     
 ###TESTING GSM MODEL AGAINST DATA FROM LITERATURE：
 #Calculating experimental growth rate
@@ -336,5 +444,86 @@ mu=popt[1]
 print('Growth rate : ',mu,'(h-1)') 
 
 
+## Computer-Aided Cell Factory Engineering ##
 
+%matplotlib notebook
+
+# Phenotypic Phase Plane (PhPP) analysis and plotting
+
+import pandas
+pandas.options.display.max_rows = 12
+from cameo import models, phenotypic_phase_plane
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
+from cobra import Reaction, Metabolite
+
+with model:
+    medium = model.medium
+    medium['EX_glc__D_e']= 11.11
+    model.medium = medium
+    print(medium)
+    print("Objective function:",model.objective)
+    maxgrowth = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
+    print("Max growth rate:",maxgrowth)
+    new_reaction = Reaction('TDAF') # acser_c + h2o_c + nad_c + pac_c + so4_c --> nadh_c + ppa_c + pyr_c + tda_c
+    new_exchange_reaction = Reaction('EX_tda_e') # Exchange reaction for TDA
+    tda = Metabolite(id='tda_c', name='tropodithietic acid', compartment='c')
+    
+    new_reaction.add_metabolites({model.metabolites.so4_c: -1,
+                                  model.metabolites.acser_c: -1,
+                                  model.metabolites.pac_c: -1,
+                                  model.metabolites.nad_c: -1,
+                                  model.metabolites.h2o_c: -1,
+                                  tda: 1, 
+                                  model.metabolites.nadh_c: 1,
+                                  model.metabolites.ppa_c: 1,
+                                  model.metabolites.pyr_c: 1,
+                                 })
+    new_exchange_reaction.add_metabolites({tda: -1
+                                          })
+    
+    model.add_reactions([new_reaction])
+    model.add_reactions([new_exchange_reaction])
+    print(new_reaction.build_reaction_string())
+    print(new_exchange_reaction.build_reaction_string())
+    model.objective = model.reactions.EX_tda_e #change objective function to the TDA exchange reaction.
+    max_tda = model.optimize().objective_value ##NB! Need CPLEX optimizer dependency!!!##
+    print(max_tda)
+
+    model.reactions.EX_o2_e.lower_bound = -10
+    result_aerobic = phenotypic_phase_plane(model, 
+                                variables=[model.reactions.Growth],
+                                objective=model.reactions.EX_tda_e,
+                                points=10)
+    
+    result_tda_3D_1 = phenotypic_phase_plane(model, 
+                                       variables=[model.reactions.EX_glc__D_e, model.reactions.EX_so4_e],
+                                       objective=model.reactions.EX_tda_e,
+                                       points=50)
+    #result_aerobic.plot(plotter)
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+X = result_tda_3D_1.data_frame.EX_glc__D_e.values
+Y = result_tda_3D_1.data_frame.EX_so4_e.values
+Z = result_tda_3D_1.data_frame.objective_upper_bound.values
+
+Z[np.isnan(Z)] = 0.
+
+ax.plot_trisurf(
+    result_tda_3D_1.data_frame.EX_glc__D_e.values,
+    result_tda_3D_1.data_frame.EX_so4_e.values,
+    result_tda_3D_1.data_frame.objective_upper_bound.values, cmap=cm.coolwarm, norm=None, vmin=None, vmax=None,
+        linewidth=100, antialiased=True)
+
+ax.set_xlabel('Glucose uptake rate[mmol gDW^-1 h^-1]')
+ax.set_ylabel('HSO4- uptake rate[mmol gDW^-1 h^-1]')
+ax.set_zlabel('TDA production rate [mmol gDW^-1 h^-1]')
+ax.mouse_init()
+     
+    #print(result_aerobic.data_frame)
+    #print(result_aerobic_3D.data_frame)
+    
+    
 
